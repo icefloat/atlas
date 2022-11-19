@@ -40,6 +40,7 @@ object StatefulVocabulary extends Vocabulary {
     Des,
     SlidingDes,
     Trend,
+    Rate,
     Integral,
     Derivative,
     desMacro("des-simple", List("10", "0.1", "0.5", ":des")),
@@ -500,6 +501,39 @@ object StatefulVocabulary extends Vocabulary {
     override def signature: String =
       "TimeSeriesExpr window:Duration -- TimeSeriesExpr"
 
+    override def examples: List[String] = List(":random,PT5M", ":random,20m")
+  }
+
+  case object Rate extends SimpleWord {
+    protected def matcher: PartialFunction[List[Any], Boolean] = {
+      case (_: String) :: TimeSeriesType(_) :: _ => true
+      case (_: String) :: (_: StyleExpr) :: _ => true
+    }
+
+    protected def executor: PartialFunction[List[Any], List[Any]] = {
+      case (v: String) :: TimeSeriesType(t) :: s =>
+        StatefulExpr.Trend(t, Strings.parseDuration(v)) :: s
+      case (v: String) :: (t: StyleExpr) :: s =>
+        t.copy(expr = StatefulExpr.Trend(t.expr, Strings.parseDuration(v))) :: s
+    }
+
+    /** Name used to refer to this command. */
+    override def name: String = "rate"
+
+    /** Signature of the method showing the before and after effect on the stack. */
+
+    override def signature: String =
+      "TimeSeriesExpr window:Duration -- TimeSeriesExpr"
+
+    /** Short description of the word to help the user understand what it does. */
+    override def summary: String =
+      """
+        |
+        |""".stripMargin
+
+    /**
+      * Set of examples showing the usage of the word.
+      */
     override def examples: List[String] = List(":random,PT5M", ":random,20m")
   }
 

@@ -63,6 +63,7 @@ object OnlineAlgorithm {
       case "rolling-min"   => OnlineRollingMin(state)
       case "sliding-des"   => OnlineSlidingDes(state)
       case "trend"         => OnlineTrend(state)
+      case "rate"         => OnlineRate(state)
       case t               => throw new IllegalArgumentException(s"unknown type: '$t'")
     }
   }

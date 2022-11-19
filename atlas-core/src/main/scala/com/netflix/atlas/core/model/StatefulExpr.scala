@@ -16,22 +16,7 @@
 package com.netflix.atlas.core.model
 
 import java.time.Duration
-
-import com.netflix.atlas.core.algorithm.OnlineAlgorithm
-import com.netflix.atlas.core.algorithm.OnlineDelay
-import com.netflix.atlas.core.algorithm.OnlineDes
-import com.netflix.atlas.core.algorithm.OnlineIgnoreN
-import com.netflix.atlas.core.algorithm.OnlineRollingMax
-import com.netflix.atlas.core.algorithm.OnlineRollingMin
-import com.netflix.atlas.core.algorithm.OnlineSlidingDes
-import com.netflix.atlas.core.algorithm.Pipeline
-import com.netflix.atlas.core.algorithm.AlgoState
-import com.netflix.atlas.core.algorithm.OnlineDerivative
-import com.netflix.atlas.core.algorithm.OnlineIntegral
-import com.netflix.atlas.core.algorithm.OnlineRollingCount
-import com.netflix.atlas.core.algorithm.OnlineRollingMean
-import com.netflix.atlas.core.algorithm.OnlineRollingSum
-import com.netflix.atlas.core.algorithm.OnlineTrend
+import com.netflix.atlas.core.algorithm.{AlgoState, OnlineAlgorithm, OnlineDelay, OnlineDerivative, OnlineDes, OnlineIgnoreN, OnlineIntegral, OnlineRate, OnlineRollingCount, OnlineRollingMax, OnlineRollingMean, OnlineRollingMin, OnlineRollingSum, OnlineSlidingDes, OnlineTrend, Pipeline}
 
 trait StatefulExpr extends TimeSeriesExpr {}
 
@@ -53,6 +38,23 @@ object StatefulExpr {
     }
 
     override def toString: String = s"$expr,$window,:trend"
+  }
+
+  /**
+    * Compute a prometheus style rate
+    */
+  case class Rate(expr: TimeSeriesExpr, window: Duration) extends OnlineExpr {
+
+    override protected def name: String = "rate"
+
+    override protected def newAlgorithmInstance(context: EvalContext): OnlineAlgorithm = {
+      // IgnoreN of 0 is used as an identity algorithm if the specified window is small
+      // enough that no averaging will take place
+      val period = (window.toMillis / context.step).toInt
+      if (period <= 0) OnlineIgnoreN(0) else OnlineRate(period)
+    }
+
+    override def toString: String = s"$expr,$window,:rate"
   }
 
   /**

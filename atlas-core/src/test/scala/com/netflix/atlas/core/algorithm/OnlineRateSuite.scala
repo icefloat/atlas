@@ -33,5 +33,15 @@ class OnlineRateSuite extends BaseOnlineAlgorithmSuite {
     assert(!algo.isEmpty)
   }
 
+  test("n = 3, decreasing because of client reset") {
+    val algo = OnlineRate(3)
+    assert(algo.next(1.0).isNaN)
+    assert(algo.next(2.0).isNaN)
+    assertEquals(algo.next(3.0), (3.0 - 1.0) / 3.0)
+    assertEquals(algo.next(1.0), (4.0 - 2.0) / 3.0)
+    assertEquals(algo.next(0.5), (4.5 - 3.0) / 3.0)
+    assertEquals(algo.next(Double.NaN), (6 - 4) / 3.0)
+  }
+
   override protected def newInstance: OnlineAlgorithm = OnlineRate(60)
 }

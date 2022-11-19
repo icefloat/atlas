@@ -23,24 +23,10 @@ case class OnlineRate(buf: RollingBuffer) extends OnlineAlgorithm {
       currentValue += prevValue
     }
 
-    val removed = buf.add(currentValue)
-
+    buf.add(currentValue)
     val result = if(n == 1) currentValue
     else if (currentSample < n) Double.NaN
-    else {
-      val firstValue = buf.first
-      val lastValue = buf.last
-
-      if (JDouble.isNaN(removed)) {
-        (currentValue - firstValue) / n
-      }
-      else if (firstValue > lastValue) {
-        (firstValue - lastValue) / n
-      }
-      else {
-        (lastValue - firstValue) / n
-      }
-    }
+    else (buf.max - buf.min) / n
     currentRate = result
     prevValue = currentValue
     result

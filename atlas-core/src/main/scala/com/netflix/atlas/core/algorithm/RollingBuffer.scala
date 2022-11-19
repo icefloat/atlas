@@ -56,9 +56,6 @@ class RollingBuffer(val values: Array[Double], start: Int = 0) {
   def first: Double = {
     values.head
   }
-  def last: Double = {
-    values.last
-  }
 
   def count: Double = {
     var result = 0.0

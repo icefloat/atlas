@@ -28,6 +28,7 @@ import com.netflix.atlas.core.model.FilterExpr
 import com.netflix.atlas.core.model.ModelExtractors
 import com.netflix.atlas.core.model.Query
 import com.netflix.atlas.core.model.StyleExpr
+import com.netflix.atlas.core.model.TimeSeriesExpr
 import com.netflix.atlas.core.stacklang.Context
 import com.netflix.atlas.core.stacklang.Interpreter
 import com.netflix.atlas.core.stacklang.Word
@@ -295,15 +296,64 @@ object ExprApi {
     }
   }
 
+  private def normalizeStat(expr: StyleExpr): StyleExpr = {
+    expr
+      .rewrite {
+        case FilterExpr.Filter(ts1, ts2) =>
+          val updated = ts2.rewrite {
+            case FilterExpr.Stat(ts, s, None) if ts == ts1 =>
+              s match {
+                case "avg"   => FilterExpr.StatAvg
+                case "min"   => FilterExpr.StatMin
+                case "max"   => FilterExpr.StatMax
+                case "last"  => FilterExpr.StatLast
+                case "total" => FilterExpr.StatTotal
+                case "count" => FilterExpr.StatCount
+                case _       => FilterExpr.Stat(ts, s, None)
+              }
+          }
+          FilterExpr.Filter(ts1, updated.asInstanceOf[TimeSeriesExpr])
+      }
+      .asInstanceOf[StyleExpr]
+  }
+
   private def exprStrings(exprs: List[StyleExpr]): List[String] = {
     // Rewrite the expressions and convert to a normalized strings
     exprs.map { expr =>
-      val rewritten = expr.rewrite {
+      val rewritten = normalizeStat(expr).rewrite {
         case q: Query => sort(q)
       }
       // Remove explicit :const, it can be determined from implicit conversion
       // and adds visual clutter
       rewritten.toString.replace(",:const", "")
+    }
+  }
+
+  private def normalizeClauses(query: Query): Query = query match {
+    case Query.In(k, vs) =>
+      val values = vs.sorted.distinct
+      if (values.lengthCompare(1) == 0)
+        Query.Equal(k, values.head)
+      else
+        Query.In(k, values)
+    case q => q
+  }
+
+  /**
+    * For conjunctions that are combined with OR, if a given conjunction is a superset
+    * of every other conjunction, then it can be removed because an entry would be matched
+    * based on the other branches of the OR, so the additional conditions do not change the
+    * outcome.
+    */
+  private def removeRedundantClauses(queries: List[List[Query]]): List[List[Query]] = {
+    queries match {
+      case Nil      => queries
+      case _ :: Nil => queries
+      case _ =>
+        val sets = queries.map(_.toSet)
+        queries.filterNot { q =>
+          sets.forall(_.subsetOf(q.toSet))
+        }
     }
   }
 
@@ -316,10 +366,19 @@ object ExprApi {
     */
   private def sort(query: Query): Query = {
     val simplified = Query.simplify(query)
-    Query
+    val normalized = Query
       .dnfList(simplified)
       .map { q =>
-        Query.cnfList(q).sortWith(_.toString < _.toString).reduce { (q1, q2) =>
+        Query
+          .cnfList(q)
+          .map(normalizeClauses)
+          .distinct
+          .sortWith(_.toString < _.toString)
+      }
+      .distinct
+    removeRedundantClauses(normalized)
+      .map { qs =>
+        qs.reduce { (q1, q2) =>
           Query.And(q1, q2)
         }
       }

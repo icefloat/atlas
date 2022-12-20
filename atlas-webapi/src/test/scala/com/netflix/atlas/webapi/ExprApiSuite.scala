@@ -113,6 +113,30 @@ class ExprApiSuite extends MUnitRouteSuite {
     assertEquals(data, List("name,sps,:eq,:sum,2.0,:mul", "name,sps,:eq,:sum"))
   }
 
+  testGet("/api/v1/expr/normalize?q=name,sps,:eq,:dup,:and") {
+    assertEquals(response.status, StatusCodes.OK)
+    val data = Json.decode[List[String]](responseAs[String])
+    assertEquals(data, List("name,sps,:eq,:sum"))
+  }
+
+  testGet("/api/v1/expr/normalize?q=name,sps,:eq,name,(,sps,),:in,:and") {
+    assertEquals(response.status, StatusCodes.OK)
+    val data = Json.decode[List[String]](responseAs[String])
+    assertEquals(data, List("name,sps,:eq,:sum"))
+  }
+
+  testGet("/api/v1/expr/normalize?q=name,sps,:eq,name,(,sps,sps,),:in,:and") {
+    assertEquals(response.status, StatusCodes.OK)
+    val data = Json.decode[List[String]](responseAs[String])
+    assertEquals(data, List("name,sps,:eq,:sum"))
+  }
+
+  testGet("/api/v1/expr/normalize?q=name,(,sps1,sps2,),:in,name,(,sps2,sps1,),:in,:and") {
+    assertEquals(response.status, StatusCodes.OK)
+    val data = Json.decode[List[String]](responseAs[String])
+    assertEquals(data, List("name,(,sps1,sps2,),:in,:sum"))
+  }
+
   testGet(
     "/api/v1/expr/normalize?q=(,name,:swap,:eq,nf.cluster,foo,:eq,:and,:sum,),foo,:sset,cpu,foo,:fcall,disk,foo,:fcall"
   ) {
@@ -366,6 +390,36 @@ class ExprApiSuite extends MUnitRouteSuite {
   test("normalize :stat-aggr filters") {
     val avg = "app,foo,:eq,name,cpuUser,:eq,:and,:sum,(,nf.cluster,),:by,:stat-max,5.0,:gt,:filter"
     assertEquals(normalize(avg), List(avg))
+  }
+
+  test("normalize :stat-aggr with no condition filters") {
+    val expr = "app,foo,:eq,name,cpuUser,:eq,:and,:sum,(,nf.cluster,),:by,:stat-max,:filter"
+    assertEquals(normalize(expr), List(expr))
+  }
+
+  test("normalize :stat to :stat-aggr if possible") {
+    val expr = "name,sps,:eq,(,nf.cluster,),:by,:dup,max,:stat,5,:gt,:filter"
+    val expected = "name,sps,:eq,:sum,(,nf.cluster,),:by,:stat-max,5.0,:gt,:filter"
+    assertEquals(normalize(expr), List(expected))
+  }
+
+  test("normalize :stat to :stat-aggr nested") {
+    val expr =
+      "name,sps,:eq,(,nf.cluster,),:by,:dup,:dup,max,:stat,:swap,avg,:stat,:sub,5,:gt,:filter"
+    val expected = "name,sps,:eq,:sum,(,nf.cluster,),:by,:stat-max,:stat-avg,:sub,5.0,:gt,:filter"
+    assertEquals(normalize(expr), List(expected))
+  }
+
+  test("normalize duplicate or clauses") {
+    val expr = "name,a,:eq,name,b,:eq,:or,name,a,:eq,:or"
+    val expected = "name,a,:eq,name,b,:eq,:or,:sum"
+    assertEquals(normalize(expr), List(expected))
+  }
+
+  test("normalize, remove redundant clauses") {
+    val expr = "name,a,:eq,:sum,b,:has,c,:has,:or,:cq,b,:has,c,:has,:or,:cq"
+    val expected = "b,:has,name,a,:eq,:and,c,:has,name,a,:eq,:and,:or,:sum"
+    assertEquals(normalize(expr), List(expected))
   }
 
   test("normalize simplify query") {

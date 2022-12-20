@@ -123,6 +123,9 @@ private[stream] class TimeGrouped(
         * so it can be used for a new time window.
         */
       private def flush(i: Int): Option[TimeGroup] = {
+        droppedOldUpdater.flush()
+        droppedFutureUpdater.flush()
+        bufferedUpdater.flush()
         val t = timestamps(i)
         val group = if (t > 0) Some(toTimeGroup(t, buf(i))) else None
         cutoffTime = t
@@ -157,7 +160,9 @@ private[stream] class TimeGrouped(
           if (t > now) {
             droppedFutureUpdater.increment()
           } else if (t <= cutoffTime) {
-            droppedOldUpdater.increment()
+            if (!v.isHeartbeat) {
+              droppedOldUpdater.increment()
+            }
           } else {
             bufferedUpdater.increment()
             val i = findBuffer(t)
